@@ -23,7 +23,11 @@ public class DeleteAddressCommand {
     }
 
     public Integer execute() throws Exception {
-        // TODO: Replace with Virtual Data Model query
-        return null;
+        BusinessPartnerAddress address = BusinessPartnerAddress.builder()
+            .businessPartner(businessPartnerId)
+            .addressID(addressId)
+            .build();
+        ODataDeleteResult result = service.deleteBusinessPartnerAddress(address).execute();
+        return result.getHttpStatusCode();
     }
 }
