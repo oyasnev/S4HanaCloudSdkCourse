@@ -1,26 +1,63 @@
 package com.sap.cloud.s4hana.examples.addressmgr.commands;
 
+import com.sap.cloud.sdk.cloudplatform.cache.CacheKey;
+import com.sap.cloud.sdk.frameworks.hystrix.CachingCommand;
+import com.sap.cloud.sdk.s4hana.connectivity.CachingErpCommand;
 import com.sap.cloud.sdk.s4hana.datamodel.odata.helper.Order;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import org.slf4j.Logger;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import com.sap.cloud.sdk.cloudplatform.logging.CloudLoggerFactory;
 import com.sap.cloud.sdk.s4hana.datamodel.odata.namespaces.businesspartner.BusinessPartner;
 import com.sap.cloud.sdk.s4hana.datamodel.odata.services.BusinessPartnerService;
 
-public class GetAllBusinessPartnersCommand {
+import javax.annotation.Nonnull;
+
+public class GetAllBusinessPartnersCommand extends CachingErpCommand<List<BusinessPartner>> {
     private static final Logger logger = CloudLoggerFactory.getLogger(GetAllBusinessPartnersCommand.class);
 
     private static final String CATEGORY_PERSON = "1";
 
     private final BusinessPartnerService service;
 
+    private static final Cache<CacheKey, List<BusinessPartner>> cache =
+        CacheBuilder.newBuilder()
+            .maximumSize(50)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .build();
+
     public GetAllBusinessPartnersCommand(final BusinessPartnerService service) {
+        super(GetAllBusinessPartnersCommand.class);
         this.service = service;
     }
 
-    public List<BusinessPartner> execute() throws Exception {
+    @Nonnull
+    @Override
+    protected Cache<CacheKey, List<BusinessPartner>> getCache() {
+        return cache;
+    }
+
+    @Nonnull
+    @Override
+    protected CacheKey getCommandCacheKey() {
+        return CacheKey.ofTenantIsolation();
+    }
+
+    @Override
+    protected List<BusinessPartner> getFallback() {
+        logger.warn("Fallback call because of exception: ", getExecutionException());
+        return Collections.emptyList();
+    }
+
+    @Nonnull
+    @Override
+    protected List<BusinessPartner> runCacheable() throws Exception {
         return service.getAllBusinessPartner()
             .select(
                 BusinessPartner.BUSINESS_PARTNER,
@@ -31,5 +68,4 @@ public class GetAllBusinessPartnersCommand {
             .orderBy(BusinessPartner.LAST_NAME, Order.ASC)
             .execute();
     }
-
 }
